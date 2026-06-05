@@ -1,0 +1,121 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sora: 'Sora', sans-serif;
+    --font-inter: 'Inter', sans-serif;
+    --font-jetbrains: 'JetBrains Mono', monospace;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-orayn-light text-orayn-text font-inter;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-sora;
+  }
+
+  /* Skeleton shimmer animation */
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      #e2e8f0 25%,
+      #f1f5f9 50%,
+      #e2e8f0 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    @apply rounded;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-orayn-light;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-orayn-mid rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-orayn-gray;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-orayn-navy text-white text-sm font-semibold px-4 py-2 rounded-btn
+           transition-all duration-200 hover:border hover:border-orayn-gold
+           focus:outline-none focus:ring-2 focus:ring-orayn-gold focus:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed active:scale-95;
+  }
+
+  .btn-secondary {
+    @apply bg-transparent text-orayn-navy text-sm font-semibold px-4 py-2 rounded-btn
+           border border-orayn-navy transition-all duration-200
+           hover:bg-orayn-navy hover:text-white
+           focus:outline-none focus:ring-2 focus:ring-orayn-navy focus:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed active:scale-95;
+  }
+
+  .btn-danger {
+    @apply bg-orayn-red text-white text-sm font-semibold px-4 py-2 rounded-btn
+           transition-all duration-200 hover:opacity-90
+           focus:outline-none focus:ring-2 focus:ring-orayn-red focus:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed active:scale-95;
+  }
+
+  .btn-success {
+    @apply bg-orayn-green text-white text-sm font-semibold px-4 py-2 rounded-btn
+           transition-all duration-200 hover:opacity-90
+           focus:outline-none focus:ring-2 focus:ring-orayn-green focus:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed active:scale-95;
+  }
+
+  .card {
+    @apply bg-white border border-orayn-mid rounded-card p-6 shadow-card;
+  }
+
+  .input-field {
+    @apply w-full bg-white border border-orayn-mid rounded-btn px-3 py-2 text-sm
+           text-orayn-text placeholder:text-orayn-gray
+           focus:outline-none focus:ring-2 focus:ring-orayn-gold focus:border-orayn-gold
+           transition-colors duration-200;
+  }
+
+  .input-error {
+    @apply border-orayn-red focus:ring-orayn-red focus:border-orayn-red;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-badge text-xs font-semibold;
+  }
+
+  .table-header {
+    @apply text-xs font-bold uppercase tracking-wide text-orayn-gray
+           bg-orayn-light px-3 py-3 text-left;
+  }
+
+  .table-cell {
+    @apply px-3 py-3 text-sm text-orayn-text;
+  }
+}
