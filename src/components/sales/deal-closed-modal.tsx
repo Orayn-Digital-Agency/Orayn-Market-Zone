@@ -34,7 +34,6 @@ const schema = z.object({
         if (!v || v.trim() === "") return true;
         try {
           const url = new URL(v.trim());
-          // Accept Paystack payment links and any HTTPS link (admin may use custom domain)
           return url.protocol === "https:";
         } catch {
           return false;
@@ -91,7 +90,6 @@ export function DealClosedModal({
     }
   }, [dealAmountRaw, priceRangeMax]);
 
-  // Calculate the 60% upfront amount for display in the payment section
   const upfront60 = (() => {
     const amount = Number(dealAmountRaw);
     if (!isNaN(amount) && amount > 0) return Math.round(amount * 0.6);
@@ -105,7 +103,6 @@ export function DealClosedModal({
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2000);
     } catch {
-      // Clipboard API not available (HTTP context, old browser)
       toast.error("Could not copy — select and copy manually");
     }
   }
@@ -118,7 +115,6 @@ export function DealClosedModal({
       const commission = Math.round(amount * rate);
       const paystackLink = values.paystackLink?.trim() || null;
 
-      // Update lead status
       const { error: leadError } = await supabase
         .from("leads")
         .update({
@@ -130,9 +126,6 @@ export function DealClosedModal({
         .eq("id", lead.id);
       if (leadError) throw leadError;
 
-      // Insert immutable deal record.
-      // paystack_link is saved here so it can be referenced from the admin
-      // Payouts page and from the Paystack webhook handler.
       const now = new Date().toISOString();
       const payoutMonth = now.slice(0, 7);
       const { error: dealError } = await supabase.from("deals").insert({
@@ -145,14 +138,10 @@ export function DealClosedModal({
         payout_month: payoutMonth,
         payout_status: "pending",
         payment_confirmed: false,
-        // paystack_link is stored as-is. When Paystack fires a webhook,
-        // the webhook handler matches by paystack_reference (from Paystack's
-        // event data), not by this URL. This field is for agent reference only.
         ...(paystackLink ? { paystack_link: paystackLink } : {}),
       });
       if (dealError) throw dealError;
 
-      // Log activity
       await supabase.from("activity_log").insert({
         agent_id: agentId,
         lead_id: lead.id,
@@ -190,22 +179,17 @@ export function DealClosedModal({
   }
 
   return (
-    <Modal
-      open={open}
-      onClose={handleClose}
-      title="Close Deal"
-      maxWidth="max-w-md"
-    >
-      <div className="space-y-5">
+    <Modal open={open} onClose={handleClose} title="Close Deal" size="md">
+      <div className="space-y-4">
         {/* Lead summary */}
-        <div className="bg-orayn-light rounded-lg p-4 space-y-1">
+        <div className="bg-orayn-light rounded-lg p-3 space-y-1">
           <p className="text-xs font-bold uppercase tracking-wide text-orayn-gray">
             Business
           </p>
-          <p className="font-sora text-base font-bold text-orayn-navy">
+          <p className="font-sora text-sm font-bold text-orayn-navy leading-snug">
             {lead.business_name}
           </p>
-          <div className="flex items-center gap-4 mt-1">
+          <div className="flex flex-wrap items-center gap-3 mt-1">
             <span className="text-xs text-orayn-gray">
               Tier:{" "}
               <span className="font-semibold text-orayn-text">
@@ -224,7 +208,7 @@ export function DealClosedModal({
         <form
           onSubmit={handleSubmit((v) => closeDealMutation.mutate(v))}
           noValidate
-          className="space-y-5"
+          className="space-y-4"
         >
           {/* Deal amount */}
           <div>
@@ -257,17 +241,17 @@ export function DealClosedModal({
 
           {/* Commission preview */}
           {preview && (
-            <div className="bg-orayn-green-bg border border-orayn-green/20 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <TrendingUp size={16} className="text-orayn-green" />
-                <p className="text-sm font-bold text-orayn-green">
+            <div className="bg-orayn-green-bg border border-orayn-green/20 rounded-lg p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp size={14} className="text-orayn-green" />
+                <p className="text-xs font-bold text-orayn-green">
                   Commission Preview
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <p className="text-xs text-orayn-gray">Rate</p>
-                  <p className="font-sora text-lg font-bold text-orayn-navy">
+                  <p className="font-sora text-base font-bold text-orayn-navy leading-tight">
                     {preview.rate === 0.3 ? "30%" : "25%"}
                     {preview.rate === 0.3 && (
                       <span className="ml-1 badge bg-orayn-gold text-orayn-dark text-xs">
@@ -278,13 +262,13 @@ export function DealClosedModal({
                 </div>
                 <div>
                   <p className="text-xs text-orayn-gray">Your commission</p>
-                  <p className="font-sora text-lg font-bold text-orayn-green">
+                  <p className="font-sora text-base font-bold text-orayn-green leading-tight">
                     {formatNairaDirect(preview.amount)}
                   </p>
                 </div>
               </div>
               {upfront60 !== null && (
-                <div className="mt-3 pt-3 border-t border-orayn-green/20 grid grid-cols-2 gap-3">
+                <div className="mt-2 pt-2 border-t border-orayn-green/20 grid grid-cols-2 gap-2">
                   <div>
                     <p className="text-xs text-orayn-gray">60% upfront due</p>
                     <p className="text-sm font-semibold text-orayn-text">
@@ -303,8 +287,8 @@ export function DealClosedModal({
               )}
               {preview.rate === 0.3 && (
                 <div className="flex items-start gap-1.5 mt-2 text-xs text-orayn-amber">
-                  <Info size={12} className="flex-shrink-0 mt-0.5" />
-                  Deal amount exceeds the listed price range — 30% rate applies.
+                  <Info size={11} className="flex-shrink-0 mt-0.5" />
+                  Deal exceeds listed range — 30% rate applies.
                 </div>
               )}
             </div>
@@ -314,25 +298,24 @@ export function DealClosedModal({
           <div>
             <label
               htmlFor="paystackLink"
-              className="block text-sm font-semibold text-orayn-text mb-1.5"
+              className="block text-sm font-semibold text-orayn-text mb-1"
             >
               Paystack payment link{" "}
               <span className="text-orayn-gray font-normal">(optional)</span>
             </label>
-            <p className="text-xs text-orayn-gray mb-2">
-              Paste the Paystack link you are sending the client for their 60%
-              upfront payment. This is saved to the deal record for admin
-              reference.
+            <p className="text-xs text-orayn-gray mb-1.5">
+              Paste the Paystack link for the 60% upfront payment. Saved to the
+              deal record.
             </p>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-orayn-gray">
-                <Link size={14} />
+                <Link size={13} />
               </span>
               <input
                 id="paystackLink"
                 type="url"
                 {...register("paystackLink")}
-                className={`input-field pl-8 pr-10 ${errors.paystackLink ? "input-error" : ""}`}
+                className={`input-field pl-8 pr-9 ${errors.paystackLink ? "input-error" : ""}`}
                 placeholder="https://paystack.com/pay/..."
               />
               {paystackLinkRaw?.trim() && !errors.paystackLink && (
@@ -344,9 +327,9 @@ export function DealClosedModal({
                   title="Copy to clipboard"
                 >
                   {linkCopied ? (
-                    <CheckCircle size={14} className="text-orayn-green" />
+                    <CheckCircle size={13} className="text-orayn-green" />
                   ) : (
-                    <Copy size={14} />
+                    <Copy size={13} />
                   )}
                 </button>
               )}
@@ -358,13 +341,13 @@ export function DealClosedModal({
             )}
             {linkCopied && (
               <p className="text-xs text-orayn-green mt-1">
-                Link copied to clipboard
+                Copied to clipboard
               </p>
             )}
           </div>
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-3 pt-2">
+          <div className="flex items-center justify-end gap-3 pt-1">
             <button
               type="button"
               onClick={handleClose}
