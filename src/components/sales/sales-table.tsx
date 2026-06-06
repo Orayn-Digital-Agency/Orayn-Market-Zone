@@ -1,26 +1,28 @@
-'use client'
+"use client";
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo } from "react";
 import {
   useReactTable,
   getCoreRowModel,
   getPaginationRowModel,
-  getFilteredRowModel,
   flexRender,
   type ColumnDef,
-  type FilterFn,
-} from '@tanstack/react-table'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { createSupabaseBrowserClient } from '@/lib/supabase-client'
-import { useAgentSession } from '@/stores/agent-session'
-import { StatusBadge, TierBadge, WebQualityBadge } from '@/components/ui/badges'
-import { DealClosedModal } from '@/components/sales/deal-closed-modal'
-import { FailedModal } from '@/components/sales/failed-modal'
-import { TableRowSkeleton } from '@/components/ui/skeleton'
-import { EmptyState } from '@/components/ui/empty-state'
-import { formatNairaDirect, timeAgo } from '@/lib/format'
-import type { Lead, LeadStatus, ServiceTier } from '@/types/supabase'
-import { toast } from 'sonner'
+} from "@tanstack/react-table";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createSupabaseBrowserClient } from "@/lib/supabase-client";
+import { useAgentSession } from "@/stores/agent-session";
+import {
+  StatusBadge,
+  TierBadge,
+  WebQualityBadge,
+} from "@/components/ui/badges";
+import { DealClosedModal } from "@/components/sales/deal-closed-modal";
+import { FailedModal } from "@/components/sales/failed-modal";
+import { TableRowSkeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { formatNairaDirect, timeAgo } from "@/lib/format";
+import type { Lead, LeadStatus, ServiceTier } from "@/types/supabase";
+import { toast } from "sonner";
 import {
   ChevronLeft,
   ChevronRight,
@@ -28,180 +30,201 @@ import {
   Search,
   Filter,
   TableProperties,
-} from 'lucide-react'
+} from "lucide-react";
 
 const STAGE_ORDER: LeadStatus[] = [
-  'uncontacted',
-  'contacted',
-  'demo_sent',
-  'negotiating',
-  'closed',
-  'lost',
-]
+  "uncontacted",
+  "contacted",
+  "demo_sent",
+  "negotiating",
+  "closed",
+  "lost",
+];
 
 const STAGE_LABELS: Record<LeadStatus, string> = {
-  uncontacted: 'Uncontacted',
-  contacted:   'Contacted',
-  demo_sent:   'Demo Sent',
-  negotiating: 'Negotiating',
-  closed:      'Closed',
-  lost:        'Lost',
-}
+  uncontacted: "Uncontacted",
+  contacted: "Contacted",
+  demo_sent: "Demo Sent",
+  negotiating: "Negotiating",
+  closed: "Closed",
+  lost: "Lost",
+};
 
 interface SalesTableProps {
-  isAdmin?: boolean
+  _isAdmin?: boolean;
 }
 
-export function SalesTable({ isAdmin = false }: SalesTableProps) {
-  const queryClient = useQueryClient()
-  const { agentCode, agentId } = useAgentSession()
+export function SalesTable({ _isAdmin = false }: SalesTableProps) {
+  const queryClient = useQueryClient();
+  const { agentCode, agentId } = useAgentSession();
 
-  const [dealModalLead, setDealModalLead] = useState<Lead | null>(null)
-  const [failModalLead, setFailModalLead] = useState<Lead | null>(null)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all')
-  const [tierFilter, setTierFilter] = useState<ServiceTier | 'all'>('all')
-  const [cityFilter, setCityFilter] = useState<string>('all')
+  const [dealModalLead, setDealModalLead] = useState<Lead | null>(null);
+  const [failModalLead, setFailModalLead] = useState<Lead | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<LeadStatus | "all">("all");
+  const [tierFilter, setTierFilter] = useState<ServiceTier | "all">("all");
+  const [cityFilter, setCityFilter] = useState<string>("all");
 
   // Fetch leads
   const { data: leads = [], isLoading } = useQuery({
-    queryKey: ['leads'],
+    queryKey: ["leads"],
     queryFn: async () => {
-      const supabase = createSupabaseBrowserClient()
+      const supabase = createSupabaseBrowserClient();
       const { data, error } = await supabase
-        .from('leads')
-        .select('*')
-        .order('lead_score', { ascending: false })
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      return data as Lead[]
+        .from("leads")
+        .select("*")
+        .order("lead_score", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as Lead[];
     },
-  })
+  });
 
   // Realtime subscription on leads table
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient()
+    const supabase = createSupabaseBrowserClient();
     const channel = supabase
-      .channel('leads-realtime')
+      .channel("leads-realtime")
       .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'leads' },
+        "postgres_changes",
+        { event: "*", schema: "public", table: "leads" },
         () => {
-          queryClient.invalidateQueries({ queryKey: ['leads'] })
-        }
+          queryClient.invalidateQueries({ queryKey: ["leads"] });
+        },
       )
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [queryClient])
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   // Claim mutation
   const claimMutation = useMutation({
     mutationFn: async (leadId: string) => {
-      if (!agentId) throw new Error('No agent session')
-      const supabase = createSupabaseBrowserClient()
-      const { data, error } = await supabase.rpc('claim_lead', {
+      if (!agentId) throw new Error("No agent session");
+      const supabase = createSupabaseBrowserClient();
+      const { data, error } = await supabase.rpc("claim_lead", {
         p_lead_id: leadId,
         p_agent_id: agentId,
-      })
-      if (error) throw error
-      const result = data as { success: boolean; message: string; claimed_by: string | null }
+      });
+      if (error) throw error;
+      const result = data as {
+        success: boolean;
+        message: string;
+        claimed_by: string | null;
+      };
       if (!result.success) {
-        throw new Error(result.message ?? 'Could not claim lead')
+        throw new Error(result.message ?? "Could not claim lead");
       }
-      return result
+      return result;
     },
     onSuccess: (_, leadId) => {
-      toast.success('Lead claimed successfully')
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      toast.success("Lead claimed successfully");
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
       // Log activity
-      const supabase = createSupabaseBrowserClient()
-      supabase.from('activity_log').insert({
+      const supabase = createSupabaseBrowserClient();
+      supabase.from("activity_log").insert({
         agent_id: agentId!,
         lead_id: leadId,
-        action: 'claimed',
-      })
+        action: "claimed",
+      });
     },
     onError: (err: Error) => {
-      toast.error('Could not claim lead', { description: err.message })
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      toast.error("Could not claim lead", { description: err.message });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
     },
-  })
+  });
 
   // Stage update mutation
   const stageMutation = useMutation({
-    mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: LeadStatus }) => {
-      const supabase = createSupabaseBrowserClient()
+    mutationFn: async ({
+      leadId,
+      newStatus,
+    }: {
+      leadId: string;
+      newStatus: LeadStatus;
+    }) => {
+      const supabase = createSupabaseBrowserClient();
       const { error } = await supabase
-        .from('leads')
+        .from("leads")
         .update({ status: newStatus })
-        .eq('id', leadId)
-      if (error) throw error
+        .eq("id", leadId);
+      if (error) throw error;
 
-      await supabase.from('activity_log').insert({
+      await supabase.from("activity_log").insert({
         agent_id: agentId!,
         lead_id: leadId,
-        action: newStatus === 'contacted' ? 'contacted'
-          : newStatus === 'demo_sent' ? 'demo_sent'
-          : 'stage_updated',
+        action:
+          newStatus === "contacted"
+            ? "contacted"
+            : newStatus === "demo_sent"
+              ? "demo_sent"
+              : "stage_updated",
         metadata: { new_status: newStatus },
-      })
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
-      queryClient.invalidateQueries({ queryKey: ['activity-log'] })
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-log"] });
     },
     onError: (err: Error) => {
-      toast.error('Failed to update stage', { description: err.message })
+      toast.error("Failed to update stage", { description: err.message });
     },
-  })
+  });
 
   // Collect unique cities for filter
   const cities = useMemo(() => {
-    const all = leads.map((l) => l.city).filter((c): c is string => !!c)
-    return [...new Set(all)].sort()
-  }, [leads])
+    const all = leads.map((l) => l.city).filter((c): c is string => !!c);
+    return [...new Set(all)].sort();
+  }, [leads]);
 
   // Filtered data
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
-      if (searchTerm && !lead.business_name.toLowerCase().includes(searchTerm.toLowerCase())) {
-        return false
+      if (
+        searchTerm &&
+        !lead.business_name.toLowerCase().includes(searchTerm.toLowerCase())
+      ) {
+        return false;
       }
-      if (statusFilter !== 'all' && lead.status !== statusFilter) return false
-      if (tierFilter !== 'all' && lead.service_tier !== tierFilter) return false
-      if (cityFilter !== 'all' && lead.city !== cityFilter) return false
-      return true
-    })
-  }, [leads, searchTerm, statusFilter, tierFilter, cityFilter])
+      if (statusFilter !== "all" && lead.status !== statusFilter) return false;
+      if (tierFilter !== "all" && lead.service_tier !== tierFilter)
+        return false;
+      if (cityFilter !== "all" && lead.city !== cityFilter) return false;
+      return true;
+    });
+  }, [leads, searchTerm, statusFilter, tierFilter, cityFilter]);
 
   const columns = useMemo<ColumnDef<Lead>[]>(
     () => [
       {
-        id: 'claim',
-        header: 'Claim',
+        id: "claim",
+        header: "Claim",
         size: 120,
         cell: ({ row }) => {
-          const lead = row.original
-          const isMyLead = lead.assigned_to === agentCode
-          const isClaimed = !!lead.assigned_to
-          const canClaim = !isClaimed && lead.status === 'uncontacted'
+          const lead = row.original;
+          const isMyLead = lead.assigned_to === agentCode;
+          const isClaimed = !!lead.assigned_to;
+          const canClaim = !isClaimed && lead.status === "uncontacted";
 
           if (isClaimed && !isMyLead) {
             return (
               <span className="text-xs text-orayn-gray">
                 {lead.assigned_to}
                 {lead.claimed_at && (
-                  <span className="block text-orayn-mid">{timeAgo(lead.claimed_at)}</span>
+                  <span className="block text-orayn-mid">
+                    {timeAgo(lead.claimed_at)}
+                  </span>
                 )}
               </span>
-            )
+            );
           }
           if (isMyLead) {
             return (
               <span className="text-xs font-semibold text-orayn-gold">
-                You ({lead.claimed_at ? timeAgo(lead.claimed_at) : ''})
+                You ({lead.claimed_at ? timeAgo(lead.claimed_at) : ""})
               </span>
-            )
+            );
           }
           if (canClaim) {
             return (
@@ -212,56 +235,67 @@ export function SalesTable({ isAdmin = false }: SalesTableProps) {
               >
                 Claim
               </button>
-            )
+            );
           }
-          return <span className="text-xs text-orayn-gray">—</span>
+          return <span className="text-xs text-orayn-gray">—</span>;
         },
       },
       {
-        accessorKey: 'business_name',
-        header: 'Business',
+        accessorKey: "business_name",
+        header: "Business",
         cell: ({ getValue }) => (
-          <span className="font-semibold text-orayn-navy text-sm">{getValue<string>()}</span>
+          <span className="font-semibold text-orayn-navy text-sm">
+            {getValue<string>()}
+          </span>
         ),
       },
       {
-        accessorKey: 'industry',
-        header: 'Industry',
+        accessorKey: "industry",
+        header: "Industry",
         cell: ({ getValue }) => (
-          <span className="text-sm text-orayn-gray">{getValue<string>() ?? '—'}</span>
+          <span className="text-sm text-orayn-gray">
+            {getValue<string>() ?? "—"}
+          </span>
         ),
       },
       {
-        accessorKey: 'phone',
-        header: 'Phone',
+        accessorKey: "phone",
+        header: "Phone",
         cell: ({ getValue }) => (
-          <span className="font-mono text-xs text-orayn-text">{getValue<string>() ?? '—'}</span>
+          <span className="font-mono text-xs text-orayn-text">
+            {getValue<string>() ?? "—"}
+          </span>
         ),
       },
       {
-        accessorKey: 'email',
-        header: 'Email',
+        accessorKey: "email",
+        header: "Email",
         cell: ({ getValue }) => {
-          const v = getValue<string>()
+          const v = getValue<string>();
           return v ? (
-            <a href={`mailto:${v}`} className="text-xs text-orayn-navy underline underline-offset-2">
+            <a
+              href={`mailto:${v}`}
+              className="text-xs text-orayn-navy underline underline-offset-2"
+            >
               {v}
             </a>
           ) : (
             <span className="text-xs text-orayn-gray">—</span>
-          )
+          );
         },
       },
       {
-        accessorKey: 'city',
-        header: 'City',
+        accessorKey: "city",
+        header: "City",
         cell: ({ getValue }) => (
-          <span className="text-sm text-orayn-gray">{getValue<string>() ?? '—'}</span>
+          <span className="text-sm text-orayn-gray">
+            {getValue<string>() ?? "—"}
+          </span>
         ),
       },
       {
-        id: 'source_link',
-        header: 'Maps',
+        id: "source_link",
+        header: "Maps",
         cell: ({ row }) =>
           row.original.source_link ? (
             <a
@@ -277,37 +311,47 @@ export function SalesTable({ isAdmin = false }: SalesTableProps) {
           ),
       },
       {
-        accessorKey: 'web_exists',
-        header: 'Web',
+        accessorKey: "web_exists",
+        header: "Web",
         cell: ({ getValue }) => (
-          <span className={`text-xs font-semibold ${getValue<boolean>() ? 'text-orayn-green' : 'text-orayn-red'}`}>
-            {getValue<boolean>() ? 'Yes' : 'No'}
+          <span
+            className={`text-xs font-semibold ${getValue<boolean>() ? "text-orayn-green" : "text-orayn-red"}`}
+          >
+            {getValue<boolean>() ? "Yes" : "No"}
           </span>
         ),
       },
       {
-        accessorKey: 'web_quality',
-        header: 'Web Quality',
-        cell: ({ getValue }) => <WebQualityBadge quality={getValue<string | null>()} />,
-      },
-      {
-        accessorKey: 'service_tier',
-        header: 'Tier',
-        cell: ({ getValue }) => {
-          const tier = getValue<ServiceTier | null>()
-          return tier ? <TierBadge tier={tier} /> : <span className="text-xs text-orayn-gray">—</span>
-        },
-      },
-      {
-        accessorKey: 'price_range',
-        header: 'Price Range',
+        accessorKey: "web_quality",
+        header: "Web Quality",
         cell: ({ getValue }) => (
-          <span className="text-xs text-orayn-text">{getValue<string>() ?? '—'}</span>
+          <WebQualityBadge quality={getValue<string | null>()} />
         ),
       },
       {
-        id: 'demo_url',
-        header: 'Demo',
+        accessorKey: "service_tier",
+        header: "Tier",
+        cell: ({ getValue }) => {
+          const tier = getValue<ServiceTier | null>();
+          return tier ? (
+            <TierBadge tier={tier} />
+          ) : (
+            <span className="text-xs text-orayn-gray">—</span>
+          );
+        },
+      },
+      {
+        accessorKey: "price_range",
+        header: "Price Range",
+        cell: ({ getValue }) => (
+          <span className="text-xs text-orayn-text">
+            {getValue<string>() ?? "—"}
+          </span>
+        ),
+      },
+      {
+        id: "demo_url",
+        header: "Demo",
         cell: ({ row }) =>
           row.original.demo_url ? (
             <a
@@ -323,23 +367,24 @@ export function SalesTable({ isAdmin = false }: SalesTableProps) {
           ),
       },
       {
-        accessorKey: 'status',
-        header: 'Status',
+        accessorKey: "status",
+        header: "Status",
         cell: ({ getValue }) => <StatusBadge status={getValue<LeadStatus>()} />,
       },
       {
-        id: 'stage_selector',
-        header: 'Update Stage',
+        id: "stage_selector",
+        header: "Update Stage",
         cell: ({ row }) => {
-          const lead = row.original
-          const isMyLead = lead.assigned_to === agentCode
-          if (!isMyLead || lead.status === 'closed' || lead.status === 'lost') return null
+          const lead = row.original;
+          const isMyLead = lead.assigned_to === agentCode;
+          if (!isMyLead || lead.status === "closed" || lead.status === "lost")
+            return null;
 
-          const currentIdx = STAGE_ORDER.indexOf(lead.status)
+          const currentIdx = STAGE_ORDER.indexOf(lead.status);
           const nextStages = STAGE_ORDER.slice(currentIdx + 1).filter(
-            (s) => s !== 'closed' && s !== 'lost'
-          )
-          if (nextStages.length === 0) return null
+            (s) => s !== "closed" && s !== "lost",
+          );
+          if (nextStages.length === 0) return null;
 
           return (
             <select
@@ -349,59 +394,61 @@ export function SalesTable({ isAdmin = false }: SalesTableProps) {
                   stageMutation.mutate({
                     leadId: lead.id,
                     newStatus: e.target.value as LeadStatus,
-                  })
+                  });
                 }
               }}
               className="input-field text-xs py-1 px-2"
             >
               <option value="">Move to...</option>
               {nextStages.map((s) => (
-                <option key={s} value={s}>{STAGE_LABELS[s]}</option>
+                <option key={s} value={s}>
+                  {STAGE_LABELS[s]}
+                </option>
               ))}
             </select>
-          )
+          );
         },
       },
       {
-        accessorKey: 'deal_amount',
-        header: 'Amount',
+        accessorKey: "deal_amount",
+        header: "Amount",
         cell: ({ getValue }) => {
-          const v = getValue<number | null>()
+          const v = getValue<number | null>();
           return v ? (
             <span className="text-sm font-semibold text-orayn-green">
               {formatNairaDirect(v)}
             </span>
           ) : (
             <span className="text-xs text-orayn-gray">—</span>
-          )
+          );
         },
       },
       {
-        accessorKey: 'commission_amount',
-        header: 'Commission',
+        accessorKey: "commission_amount",
+        header: "Commission",
         cell: ({ getValue }) => {
-          const v = getValue<number | null>()
+          const v = getValue<number | null>();
           return v ? (
             <span className="text-sm font-semibold text-orayn-gold">
               {formatNairaDirect(v)}
             </span>
           ) : (
             <span className="text-xs text-orayn-gray">—</span>
-          )
+          );
         },
       },
       {
-        id: 'actions',
-        header: 'Actions',
+        id: "actions",
+        header: "Actions",
         cell: ({ row }) => {
-          const lead = row.original
-          const isMyLead = lead.assigned_to === agentCode
-          if (!isMyLead) return null
-          if (lead.status === 'closed' || lead.status === 'lost') return null
+          const lead = row.original;
+          const isMyLead = lead.assigned_to === agentCode;
+          if (!isMyLead) return null;
+          if (lead.status === "closed" || lead.status === "lost") return null;
 
           return (
             <div className="flex items-center gap-1.5">
-              {lead.status === 'negotiating' && (
+              {lead.status === "negotiating" && (
                 <button
                   onClick={() => setDealModalLead(lead)}
                   className="btn-success text-xs px-2.5 py-1.5"
@@ -416,12 +463,12 @@ export function SalesTable({ isAdmin = false }: SalesTableProps) {
                 Failed
               </button>
             </div>
-          )
+          );
         },
       },
     ],
-    [agentCode, claimMutation, stageMutation]
-  )
+    [agentCode, claimMutation, stageMutation],
+  );
 
   const table = useReactTable({
     data: filteredLeads,
@@ -429,14 +476,17 @@ export function SalesTable({ isAdmin = false }: SalesTableProps) {
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     initialState: { pagination: { pageSize: 50, pageIndex: 0 } },
-  })
+  });
 
   return (
     <div className="space-y-4">
       {/* Filter bar */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-orayn-gray" />
+          <Search
+            size={15}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-orayn-gray"
+          />
           <input
             type="text"
             placeholder="Search business name..."
@@ -450,23 +500,33 @@ export function SalesTable({ isAdmin = false }: SalesTableProps) {
           <Filter size={14} className="text-orayn-gray hidden sm:block" />
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as LeadStatus | 'all')}
+            onChange={(e) =>
+              setStatusFilter(e.target.value as LeadStatus | "all")
+            }
             className="input-field w-auto text-sm"
           >
             <option value="all">All statuses</option>
             {STAGE_ORDER.map((s) => (
-              <option key={s} value={s}>{STAGE_LABELS[s]}</option>
+              <option key={s} value={s}>
+                {STAGE_LABELS[s]}
+              </option>
             ))}
           </select>
 
           <select
             value={tierFilter}
-            onChange={(e) => setTierFilter(e.target.value as ServiceTier | 'all')}
+            onChange={(e) =>
+              setTierFilter(e.target.value as ServiceTier | "all")
+            }
             className="input-field w-auto text-sm"
           >
             <option value="all">All tiers</option>
-            {(['Starter', 'Business', 'Premium', 'Platform'] as ServiceTier[]).map((t) => (
-              <option key={t} value={t}>{t}</option>
+            {(
+              ["Starter", "Business", "Premium", "Platform"] as ServiceTier[]
+            ).map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
             ))}
           </select>
 
@@ -478,7 +538,9 @@ export function SalesTable({ isAdmin = false }: SalesTableProps) {
             >
               <option value="all">All cities</option>
               {cities.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
             </select>
           )}
@@ -493,8 +555,14 @@ export function SalesTable({ isAdmin = false }: SalesTableProps) {
               {table.getHeaderGroups().map((hg) => (
                 <tr key={hg.id} className="border-b border-orayn-mid">
                   {hg.headers.map((header) => (
-                    <th key={header.id} className="table-header whitespace-nowrap">
-                      {flexRender(header.column.columnDef.header, header.getContext())}
+                    <th
+                      key={header.id}
+                      className="table-header whitespace-nowrap"
+                    >
+                      {flexRender(
+                        header.column.columnDef.header,
+                        header.getContext(),
+                      )}
                     </th>
                   ))}
                 </tr>
@@ -517,15 +585,15 @@ export function SalesTable({ isAdmin = false }: SalesTableProps) {
                 </tr>
               ) : (
                 table.getRowModel().rows.map((row) => {
-                  const lead = row.original
+                  const lead = row.original;
                   const rowBg =
-                    lead.status === 'closed'
-                      ? 'bg-orayn-green-bg'
-                      : lead.status === 'lost'
-                      ? 'bg-orayn-red-bg'
-                      : lead.assigned_to === agentCode
-                      ? 'bg-blue-50/30'
-                      : ''
+                    lead.status === "closed"
+                      ? "bg-orayn-green-bg"
+                      : lead.status === "lost"
+                        ? "bg-orayn-red-bg"
+                        : lead.assigned_to === agentCode
+                          ? "bg-blue-50/30"
+                          : "";
 
                   return (
                     <tr
@@ -533,12 +601,18 @@ export function SalesTable({ isAdmin = false }: SalesTableProps) {
                       className={`border-b border-orayn-mid last:border-0 transition-colors ${rowBg} hover:bg-orayn-light/50`}
                     >
                       {row.getVisibleCells().map((cell) => (
-                        <td key={cell.id} className="table-cell whitespace-nowrap">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        <td
+                          key={cell.id}
+                          className="table-cell whitespace-nowrap"
+                        >
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext(),
+                          )}
                         </td>
                       ))}
                     </tr>
-                  )
+                  );
                 })
               )}
             </tbody>
@@ -549,12 +623,11 @@ export function SalesTable({ isAdmin = false }: SalesTableProps) {
         {!isLoading && filteredLeads.length > 0 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-orayn-mid bg-orayn-light/50">
             <p className="text-xs text-orayn-gray">
-              Showing{' '}
-              {table.getState().pagination.pageIndex * 50 + 1}–
+              Showing {table.getState().pagination.pageIndex * 50 + 1}–
               {Math.min(
                 (table.getState().pagination.pageIndex + 1) * 50,
-                filteredLeads.length
-              )}{' '}
+                filteredLeads.length,
+              )}{" "}
               of {filteredLeads.length} leads
             </p>
             <div className="flex items-center gap-2">
@@ -568,7 +641,7 @@ export function SalesTable({ isAdmin = false }: SalesTableProps) {
                 <ChevronLeft size={16} />
               </button>
               <span className="text-xs text-orayn-text font-medium">
-                Page {table.getState().pagination.pageIndex + 1} of{' '}
+                Page {table.getState().pagination.pageIndex + 1} of{" "}
                 {table.getPageCount()}
               </span>
               <button
@@ -603,5 +676,5 @@ export function SalesTable({ isAdmin = false }: SalesTableProps) {
         />
       )}
     </div>
-  )
+  );
 }
